@@ -23,75 +23,29 @@ import UserMenuProfileTabContent from "./profile-tab-content";
 import UserMenuRepliesNotificationsList from "./replies-notifications-list";
 import UserMenuReviewablesList from "./reviewables-list";
 
-const DEFAULT_TAB_ID = "all-notifications";
-const DEFAULT_PANEL_COMPONENT = UserMenuNotificationsList;
+const DEFAULT_TAB_ID = "profile";
+const DEFAULT_PANEL_COMPONENT = UserMenuProfileTabContent;
 
 const REVIEW_QUEUE_TAB_ID = "review-queue";
 
 const CORE_TOP_TABS = [
   class extends UserMenuTab {
     id = DEFAULT_TAB_ID;
-    icon = "bell";
+    icon = "user";
     panelComponent = DEFAULT_PANEL_COMPONENT;
 
     get linkWhenActive() {
+      return `${this.currentUser.path}/summary`;
+    }
+  },
+
+  class extends UserMenuTab {
+    id = "all-notifications";
+    icon = "bell";
+    panelComponent = UserMenuNotificationsList;
+
+    get linkWhenActive() {
       return `${this.currentUser.path}/notifications`;
-    }
-  },
-
-  class extends UserMenuTab {
-    id = "replies";
-    icon = "user_menu.replies";
-    panelComponent = UserMenuRepliesNotificationsList;
-    notificationTypes = [
-      "mentioned",
-      "group_mentioned",
-      "posted",
-      "quoted",
-      "replied",
-    ];
-
-    get count() {
-      return (
-        this.getUnreadCountForType("mentioned") +
-        this.getUnreadCountForType("group_mentioned") +
-        this.getUnreadCountForType("posted") +
-        this.getUnreadCountForType("quoted") +
-        this.getUnreadCountForType("replied")
-      );
-    }
-
-    get linkWhenActive() {
-      return `${this.currentUser.path}/notifications/responses`;
-    }
-  },
-
-  class extends UserMenuTab {
-    id = "likes";
-    icon = "heart";
-    panelComponent = UserMenuLikesNotificationsList;
-
-    get shouldDisplay() {
-      return !this.currentUser.user_option.likes_notifications_disabled;
-    }
-
-    get count() {
-      return (
-        this.getUnreadCountForType("liked") +
-        this.getUnreadCountForType("liked_consolidated") +
-        this.getUnreadCountForType("reaction")
-      );
-    }
-
-    // TODO(osama): reaction is a type used by the reactions plugin, but it's
-    // added here temporarily until we add a plugin API for extending
-    // filterByTypes in lists
-    get notificationTypes() {
-      return ["liked", "liked_consolidated", "reaction"];
-    }
-
-    get linkWhenActive() {
-      return `${this.currentUser.path}/notifications/likes-received`;
     }
   },
 
@@ -148,15 +102,7 @@ const CORE_TOP_TABS = [
 ];
 
 const CORE_BOTTOM_TABS = [
-  class extends UserMenuTab {
-    id = "profile";
-    icon = "user";
-    panelComponent = UserMenuProfileTabContent;
-
-    get linkWhenActive() {
-      return `${this.currentUser.path}/summary`;
-    }
-  },
+  
 ];
 
 const CORE_OTHER_NOTIFICATIONS_TAB = class extends UserMenuTab {
