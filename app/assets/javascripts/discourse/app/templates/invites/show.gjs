@@ -68,8 +68,7 @@ export default RouteTemplate(
                 </p>
               {{/unless}}
 
-              {{#if @controller.externalAuthsOnly}}
-                {{! authOptions are present once the user has followed the OmniAuth flow (e.g. twitter/google/etc) }}
+              {{#if @controller.externalAuthsEnabled}}
                 {{#if @controller.authOptions}}
                   {{#unless @controller.isInviteLink}}
                     <InputTip

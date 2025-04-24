@@ -171,17 +171,13 @@ export default class InvitesShowController extends Controller {
 
   @discourseComputed(
     "externalAuthsEnabled",
-    "externalAuthsOnly",
     "discourseConnectEnabled"
   )
   showSocialLoginAvailable(
     externalAuthsEnabled,
-    externalAuthsOnly,
     discourseConnectEnabled
   ) {
-    return (
-      externalAuthsEnabled && !externalAuthsOnly && !discourseConnectEnabled
-    );
+    return externalAuthsEnabled && !discourseConnectEnabled;
   }
 
   @discourseComputed(
