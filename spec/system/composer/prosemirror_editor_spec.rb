@@ -146,9 +146,9 @@ describe "Composer - ProseMirror editor", type: :system do
 
     it "supports __ or ** to create a bold text" do
       open_composer_and_toggle_rich_editor
-      composer.type_content("__This is bold__\n")
-      composer.type_content("**This is bold**\n")
-      composer.type_content("Hey __This is bold__\n")
+      composer.type_content("__This is bold__\n\n")
+      composer.type_content("**This is bold**\n\n")
+      composer.type_content("Hey __This is bold__\n\n")
       composer.type_content("Hey**This is bold**")
 
       expect(rich).to have_css("strong", text: "This is bold", count: 4)
@@ -184,6 +184,17 @@ describe "Composer - ProseMirror editor", type: :system do
       composer.type_content("Hey\n---There\n*** Friend\n___ How\n\u2013-are\n\u2014-you")
 
       expect(rich).to have_css("hr", count: 5)
+    end
+
+    it "supports <http://example.com> to create an 'autolink'" do
+      open_composer_and_toggle_rich_editor
+      composer.type_content("<http://example.com>")
+
+      expect(rich).to have_css("a", text: "http://example.com")
+
+      composer.toggle_rich_editor
+
+      expect(composer).to have_value("<http://example.com>")
     end
   end
 
@@ -434,7 +445,7 @@ describe "Composer - ProseMirror editor", type: :system do
 
     it "supports Ctrl + Z and Ctrl + Shift + Z to undo and redo" do
       open_composer_and_toggle_rich_editor
-      composer.type_content("This is a test")
+      cdp.copy_paste("This is a test")
       composer.send_keys([PLATFORM_KEY_MODIFIER, "z"])
 
       expect(rich).not_to have_css("p", text: "This is a test")
@@ -538,7 +549,7 @@ describe "Composer - ProseMirror editor", type: :system do
       )
     end
 
-    it "respects existing marks when pasting a url to make a link" do
+    it "respects existing marks when pasting a url over a selection" do
       cdp.allow_clipboard
       open_composer_and_toggle_rich_editor
       cdp.copy_paste("not selected `code`**bold**not*italic* not selected")
@@ -557,7 +568,7 @@ describe "Composer - ProseMirror editor", type: :system do
       )
     end
 
-    it "auto-links pasted URLs from text/html" do
+    it "auto-links pasted URLs from text/html over a selection" do
       cdp.allow_clipboard
       open_composer_and_toggle_rich_editor
 
@@ -583,7 +594,11 @@ describe "Composer - ProseMirror editor", type: :system do
         lines">
       HTML
 
-      expect(rich).to have_css("img[alt='alt with new lines'][title='title with new lines']")
+      img = rich.find("img")
+
+      expect(img["src"]).to eq("https://example.com/image.png")
+      expect(img["alt"]).to eq("alt with new lines")
+      expect(img["title"]).to eq("title with new lines")
 
       composer.toggle_rich_editor
 
@@ -623,21 +638,23 @@ describe "Composer - ProseMirror editor", type: :system do
     end
   end
 
-  describe "auto-linking/unlinking" do
+  describe "auto-linking/unlinking while typing" do
     it "auto-links non-protocol URLs and removes the link when no longer a URL" do
       open_composer_and_toggle_rich_editor
 
-      composer.type_content("www.example.com")
+      composer.type_content("www.example.com and also mid-paragraph www.example2.com")
 
       expect(rich).to have_css("a", text: "www.example.com")
+      expect(rich).to have_css("a", text: "www.example2.com")
+      expect(rich).to have_css("a", count: 2)
 
       composer.send_keys(%i[backspace backspace])
 
-      expect(rich).to have_no_css("a")
+      expect(rich).to have_css("a", count: 1)
 
       composer.type_content("om")
 
-      expect(rich).to have_css("a", text: "www.example.com")
+      expect(rich).to have_css("a", text: "www.example2.com")
     end
 
     it "auto-links protocol URLs" do
@@ -671,6 +688,19 @@ describe "Composer - ProseMirror editor", type: :system do
 
       expect(rich).to have_css("code", text: "code mark https://example.com")
       expect(rich).to have_no_css("a", text: "https://example.com")
+    end
+
+    it "doesn't continue a <https://url> markup='autolink'" do
+      open_composer_and_toggle_rich_editor
+
+      composer.type_content("<https://example.com>.de")
+
+      expect(rich).to have_css("a", text: "https://example.com")
+      expect(rich).to have_no_css("a", text: "https://example.com.de")
+
+      composer.toggle_rich_editor
+
+      expect(composer).to have_value("<https://example.com>.de")
     end
   end
 
