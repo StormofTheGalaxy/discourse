@@ -30,16 +30,6 @@ const REVIEW_QUEUE_TAB_ID = "review-queue";
 
 const CORE_TOP_TABS = [
   class extends UserMenuTab {
-    id = DEFAULT_TAB_ID;
-    icon = "user";
-    panelComponent = DEFAULT_PANEL_COMPONENT;
-
-    get linkWhenActive() {
-      return `${this.currentUser.path}/summary`;
-    }
-  },
-
-  class extends UserMenuTab {
     id = "all-notifications";
     icon = "bell";
     panelComponent = UserMenuNotificationsList;
@@ -57,10 +47,6 @@ const CORE_TOP_TABS = [
 
     get count() {
       return this.getUnreadCountForType("private_message");
-    }
-
-    get shouldDisplay() {
-      return this.currentUser?.can_send_private_messages;
     }
 
     get linkWhenActive() {
@@ -102,7 +88,15 @@ const CORE_TOP_TABS = [
 ];
 
 const CORE_BOTTOM_TABS = [
-  
+  class extends UserMenuTab {
+    id = DEFAULT_TAB_ID;
+    icon = "user";
+    panelComponent = DEFAULT_PANEL_COMPONENT;
+
+    get linkWhenActive() {
+      return `${this.currentUser.path}/summary`;
+    }
+  },
 ];
 
 const CORE_OTHER_NOTIFICATIONS_TAB = class extends UserMenuTab {
