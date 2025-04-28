@@ -49,6 +49,10 @@ const CORE_TOP_TABS = [
       return this.getUnreadCountForType("private_message");
     }
 
+    get shouldDisplay() {
+      return this.currentUser?.can_send_private_messages;
+    }
+
     get linkWhenActive() {
       return `${this.currentUser.path}/messages`;
     }
