@@ -403,6 +403,39 @@ RSpec.describe Admin::ThemesController do
         expect(json["theme"]["auto_update"]).to eq(false)
         expect(UserHistory.where(action: UserHistory.actions[:change_theme]).count).to eq(1)
       end
+
+      context "with registered user_guardian_can_create_theme" do
+        after { DiscoursePluginRegistry.reset! }
+
+        it "doesn't allow importing a theme if the modifier returns false" do
+          plugin_instance = Plugin::Instance.new
+          can_create = true
+
+          plugin_instance.register_modifier(:user_guardian_can_create_theme) do |val, guardian|
+            expect(guardian.user).to eq(admin)
+            can_create
+          end
+
+          RemoteTheme.stubs(:import_theme).returns(Fabricate(:theme))
+          post "/admin/themes/import.json",
+               params: {
+                 remote: "https://github.com/discourse/discourse-brand-header.git",
+               }
+          expect(response.status).to eq(201)
+          json = response.parsed_body
+          expect(json["theme"]).to be_present
+
+          can_create = false
+
+          expect do
+            post "/admin/themes/import.json",
+                 params: {
+                   remote: "https://github.com/discourse/discourse-brand-header-2.git",
+                 }
+          end.not_to change { Theme.count }
+          expect(response.status).to eq(403)
+        end
+      end
     end
 
     shared_examples "theme import not allowed" do
@@ -478,6 +511,7 @@ RSpec.describe Admin::ThemesController do
       end
 
       it "filters experimental system themes" do
+        SiteSetting.experimental_system_themes = ""
         get "/admin/themes.json"
         expect(response.status).to eq(200)
         theme_names = response.parsed_body["themes"].map { |theme| theme[:name] }
@@ -573,7 +607,7 @@ RSpec.describe Admin::ThemesController do
     context "when logged in as an admin" do
       before { sign_in(admin) }
 
-      it "creates a theme" do
+      it "creates a theme and theme fields" do
         post "/admin/themes.json",
              params: {
                theme: {
@@ -588,6 +622,89 @@ RSpec.describe Admin::ThemesController do
 
         expect(json["theme"]["theme_fields"].length).to eq(1)
         expect(UserHistory.where(action: UserHistory.actions[:change_theme]).count).to eq(1)
+      end
+
+      it "can set a theme to default" do
+        post "/admin/themes.json", params: { theme: { name: "my test name", default: "true" } }
+
+        expect(response.status).to eq(201)
+
+        json = response.parsed_body
+        expect(json["theme"]["default"]).to eq(true)
+      end
+
+      context "when creating a theme field with an invalid target" do
+        it "errors" do
+          post "/admin/themes.json",
+               params: {
+                 theme: {
+                   name: "my test name",
+                   theme_fields: [name: "scss", target: "blah", value: "body{color: red;}"],
+                 },
+               }
+
+          expect(response.status).to eq(400)
+
+          json = response.parsed_body
+          expect(json["errors"]).to include("Unknown target blah passed to set field")
+        end
+      end
+
+      context "when creating a theme field with an invalid type" do
+        it "errors" do
+          post "/admin/themes.json",
+               params: {
+                 theme: {
+                   name: "my test name",
+                   theme_fields: [name: "blahblah", target: "common", value: "body{color: red;}"],
+                 },
+               }
+
+          expect(response.status).to eq(400)
+
+          json = response.parsed_body
+          expect(json["errors"]).to include(
+            "No type could be guessed for field blahblah for target common",
+          )
+        end
+      end
+
+      context "with registered user_guardian_can_create_theme" do
+        after { DiscoursePluginRegistry.reset! }
+
+        it "doesn't allow theme creation if the modifier returns false" do
+          plugin_instance = Plugin::Instance.new
+          can_create = true
+
+          plugin_instance.register_modifier(:user_guardian_can_create_theme) do |val, guardian|
+            expect(guardian.user).to eq(admin)
+            can_create
+          end
+
+          post "/admin/themes.json",
+               params: {
+                 theme: {
+                   name: "my test name",
+                   theme_fields: [name: "scss", target: "common", value: "body{color: red;}"],
+                 },
+               }
+          expect(response.status).to eq(201)
+          json = response.parsed_body
+          expect(json["theme"]).to be_present
+
+          can_create = false
+
+          expect do
+            post "/admin/themes.json",
+                 params: {
+                   theme: {
+                     name: "my test name 2",
+                     theme_fields: [name: "scss", target: "common", value: "body{color: red;}"],
+                   },
+                 }
+          end.not_to change { Theme.count }
+          expect(response.status).to eq(403)
+        end
       end
     end
 
@@ -618,6 +735,20 @@ RSpec.describe Admin::ThemesController do
       before { sign_in(user) }
 
       include_examples "theme creation not allowed"
+    end
+
+    context "when theme allowlist mode is enabled" do
+      before do
+        global_setting :allowed_theme_repos, "  https://magic.com/repo.git, https://x.com/git"
+      end
+
+      it "prevents theme creation with 404 error" do
+        expect do
+          post "/admin/themes.json", params: { theme: { name: "my test name" } }
+        end.not_to change { Theme.count }
+
+        expect(response.status).to eq(404)
+      end
     end
   end
 
@@ -1066,7 +1197,7 @@ RSpec.describe Admin::ThemesController do
       it "returns the right response when an invalid id is given" do
         delete "/admin/themes/9999.json"
 
-        expect(response.status).to eq(400)
+        expect(response.status).to eq(404)
       end
 
       it "deletes the field's javascript cache" do
@@ -1401,7 +1532,7 @@ RSpec.describe Admin::ThemesController do
         get "/admin/themes/#{theme.id}/translations/foo.json"
         expect(response.status).to eq(400)
         expect(response.parsed_body["errors"]).to include(
-          I18n.t("invalid_params", message: :locale),
+          I18n.t("errors.messages.invalid_locale", invalid_locale: "foo"),
         )
       end
     end
@@ -1438,19 +1569,24 @@ RSpec.describe Admin::ThemesController do
       expect do
         delete "/admin/themes/bulk_destroy.json", params: { theme_ids: theme_ids }
       end.to change { Theme.count }.by(-2)
+      expect(response.status).to eq(204)
     end
 
-    it "does not destroy if any theme is system" do
+    it "does not destroy any themes if any of them is a system theme" do
       theme.update_columns(id: -10)
       expect do
         delete "/admin/themes/bulk_destroy.json", params: { theme_ids: theme_ids }
-      end.to change { Theme.count }.by(-1)
-      expect { theme_2.reload }.to raise_exception(ActiveRecord::RecordNotFound)
+      end.not_to change { Theme.count }
+      expect(response.status).to eq(400)
+      expect(response.parsed_body["errors"]).to eq(
+        ["Theme ids " + I18n.t("errors.messages.must_all_be_positive")],
+      )
     end
 
     it "logs the theme destroy action for each theme" do
       StaffActionLogger.any_instance.expects(:log_theme_destroy).twice
       delete "/admin/themes/bulk_destroy.json", params: { theme_ids: theme_ids }
+      expect(response.status).to eq(204)
     end
   end
 

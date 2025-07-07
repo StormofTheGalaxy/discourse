@@ -1003,11 +1003,12 @@ class User < ActiveRecord::Base
   end
 
   def new_user_posting_on_first_day?
-    !staff? && trust_level < TrustLevel[2] &&
-      (
-        trust_level == TrustLevel[0] || self.first_post_created_at.nil? ||
-          self.first_post_created_at >= 24.hours.ago
-      )
+    return false if staff?
+    return false if trust_level >= TrustLevel[2]
+    if self.first_post_created_at.present? && self.first_post_created_at <= 24.hours.ago
+      return false
+    end
+    true
   end
 
   def new_user?
@@ -1191,7 +1192,7 @@ class User < ActiveRecord::Base
     normalized_username = normalize_username(username)
 
     # TODO it may be worth caching this in a distributed cache, should be benched
-    if SiteSetting.external_system_avatars_enabled
+    if SiteSetting.external_system_avatars_url.present?
       url = SiteSetting.external_system_avatars_url.dup
       url = +"#{Discourse.base_path}#{url}" unless url =~ %r{\Ahttps?://}
       url.gsub! "{color}", letter_avatar_color(normalized_username)
